@@ -45,6 +45,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
+    async jwt({ token, user }) {
+      if (user?.email) {
+        const email = user.email.trim().toLowerCase();
+        const [dbUser] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, email));
+        if (dbUser) token.sub = dbUser.id;
+      } else if (user?.id) {
+        token.sub = user.id;
+      }
+      return token;
+    },
     async signIn({ user, account }) {
       if (!user.email) return false;
       if (account?.provider === "credentials") return true;
@@ -62,19 +75,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       );
     },
     async session({ session, token }) {
-      if (!token.sub) return session;
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, token.sub));
-      if (!user) return session;
+      let dbUser = null;
+
+      if (token.sub) {
+        [dbUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, token.sub));
+      }
+
+      if (!dbUser && token.email) {
+        [dbUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, String(token.email).trim().toLowerCase()));
+      }
+
+      if (!dbUser) return session;
 
       const [permissions] = await db
         .select()
         .from(userPermissions)
-        .where(eq(userPermissions.userId, user.id));
+        .where(eq(userPermissions.userId, dbUser.id));
 
-      session.user = toSessionUser(user, permissions ?? null) as unknown as typeof session.user;
+      session.user = toSessionUser(
+        dbUser,
+        permissions ?? null,
+      ) as unknown as typeof session.user;
       return session;
     },
   },

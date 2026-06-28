@@ -9,7 +9,7 @@ import {
   committeeMemberships,
   committees,
 } from "@/lib/db/schema";
-import { canManageUsers as canManage } from "@/lib/permissions";
+import { canManageUsers as canManage, rosterPermissionsFromCommittees } from "@/lib/permissions";
 
 export async function GET() {
   const session = await auth();
@@ -50,12 +50,36 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+  const email = body.email?.trim()?.toLowerCase();
+  const name = body.name?.trim();
+
+  if (!email || !name) {
+    return NextResponse.json(
+      { error: "Name and email are required" },
+      { status: 400 },
+    );
+  }
+
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email));
+  if (existing) {
+    return NextResponse.json(
+      { error: "That email is already on the roster" },
+      { status: 409 },
+    );
+  }
+
   const userId = randomUUID();
+  const committeesList: string[] = body.committees ?? [];
+  const { canEditAll, canManageUsers } =
+    rosterPermissionsFromCommittees(committeesList);
 
   await db.insert(users).values({
     id: userId,
-    email: body.email,
-    name: body.name,
+    email,
+    name,
     isExecMember: true,
     status: "active",
   });
@@ -64,12 +88,12 @@ export async function POST(req: Request) {
     id: randomUUID(),
     userId,
     canViewAll: true,
-    canEditAll: body.canEditAll ?? false,
-    canManageUsers: body.canManageUsers ?? false,
-    committeeEditScopes: JSON.stringify(body.committees ?? []),
+    canEditAll,
+    canManageUsers,
+    committeeEditScopes: JSON.stringify(committeesList),
   });
 
-  for (const slug of body.committees ?? []) {
+  for (const slug of committeesList) {
     const [committee] = await db
       .select()
       .from(committees)
