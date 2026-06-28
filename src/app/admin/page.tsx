@@ -41,6 +41,10 @@ export default async function AdminPage() {
     .select()
     .from(eventPlanningTemplates)
     .orderBy(eventPlanningTemplates.offsetDays, eventPlanningTemplates.sortOrder);
+  const allCommittees = await db
+    .select({ slug: committees.slug, name: committees.name })
+    .from(committees)
+    .orderBy(committees.sortOrder);
 
   return (
     <InternalLayout>
@@ -52,6 +56,7 @@ export default async function AdminPage() {
       <div className="mt-6">
         <AdminClient
           roster={enriched}
+          committees={allCommittees}
           initialSettings={settings}
           initialTemplates={templates}
         />

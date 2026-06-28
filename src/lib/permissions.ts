@@ -54,3 +54,12 @@ export function isAllowedEmailDomain(email: string): boolean {
   const domain = email.split("@")[1]?.toLowerCase();
   return domain ? domains.includes(domain) : false;
 }
+
+/** Prez committee members receive org-wide admin permissions. */
+export function rosterPermissionsFromCommittees(committees: string[]) {
+  const isPrez = committees.includes("prez");
+  return {
+    canEditAll: isPrez,
+    canManageUsers: isPrez,
+  };
+}
